@@ -107,6 +107,21 @@ export default function EditModal({ item, onSave, onClose }) {
             />
           </div>
 
+          <div className="field-group">
+            <label>Recordatorios Telegram (días antes de comprar)</label>
+            <input
+              value={(form.reminder_days ?? [30, 7, 1]).join(', ')}
+              onChange={e => set(
+                'reminder_days',
+                e.target.value.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0)
+              )}
+              placeholder="30, 7, 1"
+            />
+            <small style={{ color: 'var(--text-muted, #888)', fontSize: '0.8rem' }}>
+              Ej: "30, 7, 1" enviará recordatorios 30, 7 y 1 días antes
+            </small>
+          </div>
+
           <div className="modal-actions">
             <button type="button" className="btn-ghost" onClick={onClose}>Cancelar</button>
             <button type="submit" className="btn-primary">Guardar cambios</button>

@@ -127,6 +127,7 @@ export default function Dashboard({ session }) {
       notes: updated.notes,
       link: updated.link,
       urgency: updated.urgency,
+      reminder_days: updated.reminder_days,
     }
     await supabase.from('trip_items').update(row).eq('id', updated.id)
     setItems(prev => prev.map(i => i.id === updated.id ? { ...i, ...updated } : i))
@@ -251,6 +252,7 @@ function normalizeItem(row) {
     done: row.done,
     assigned_to: row.assigned_to,
     notes: row.notes,
+    reminder_days: row.reminder_days,
   }
 }
 
