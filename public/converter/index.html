@@ -184,11 +184,16 @@
 <script>
 // ── Telegram SDK init ───────────────────────────────────────────────────────
 const tg = window.Telegram?.WebApp
-if (tg) {
+if (tg?.initData) {
+  // Full Mini App context (private chat web_app button)
   tg.ready()
   tg.expand()
   tg.MainButton.setText('Cerrar').show()
   tg.MainButton.onClick(() => tg.close())
+} else if (tg) {
+  // Opened via url button in browser — expand still works
+  tg.ready()
+  tg.expand()
 }
 
 function haptic() {

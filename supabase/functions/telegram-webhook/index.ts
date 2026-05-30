@@ -291,7 +291,7 @@ async function handleCambio(amount: string, currency: string, ctx: Ctx) {
     {
       reply_markup: {
         inline_keyboard: [
-          [{ text: '💱 Abrir conversor', web_app: { url: miniAppUrl } }],
+          [{ text: '💱 Abrir conversor', url: miniAppUrl }],
           [{ text: '✕ Cerrar', callback_data: 'dismiss' }],
         ],
       },
