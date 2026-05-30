@@ -271,6 +271,35 @@ async function handleRecordatorios(itemId: string, daysArgs: string[], ctx: Ctx)
   )
 }
 
+const MINI_APP_BASE = 'https://gonxolo.github.io/viaje-app/converter/'
+
+async function handleCambio(amount: string, currency: string, ctx: Ctx) {
+  const validCurrencies = ['KRW', 'JPY', 'USD', 'CLP']
+  const cur = currency.toUpperCase()
+
+  const urlParams = new URLSearchParams()
+  if (amount && !isNaN(Number(amount))) urlParams.set('amount', amount)
+  if (cur && validCurrencies.includes(cur)) urlParams.set('currency', cur)
+
+  const query = urlParams.toString()
+  const miniAppUrl = MINI_APP_BASE + (query ? '?' + query : '')
+
+  return sendMessage(
+    `💱 *Conversor de divisas*\n` +
+    `Tasas en tiempo real entre ₩ KRW, ¥ JPY, US$ USD y $ CLP.\n\n` +
+    `_Toca cualquier campo para escribir desde esa moneda._`,
+    {
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: '💱 Abrir conversor', web_app: { url: miniAppUrl } }],
+          [{ text: '✕ Cerrar', callback_data: 'dismiss' }],
+        ],
+      },
+    },
+    ctx,
+  )
+}
+
 async function handleAyuda(ctx: Ctx) {
   const text =
     `🤖 *Comandos disponibles*\n\n` +
@@ -279,11 +308,13 @@ async function handleAyuda(ctx: Ctx) {
     `/listo <id> — Marcar un ítem como comprado\n` +
     `/asignar <id> <persona> — Asignar responsable\n` +
     `/recordatorios <id> <días> — Cambiar recordatorios\n` +
+    `/cambio [cantidad] [moneda] — Conversor de divisas\n` +
     `/ayuda — Mostrar esta ayuda\n\n` +
     `*Ejemplos:*\n` +
     `• \`/listo flight-pus-kix\`\n` +
     `• \`/asignar jr-pass Gonzalo\`\n` +
-    `• \`/recordatorios jr-pass 30 7 1\`\n\n` +
+    `• \`/recordatorios jr-pass 30 7 1\`\n` +
+    `• \`/cambio 50000 KRW\`\n\n` +
     `Los IDs aparecen en cada ítem de /lista y /urgentes.`
 
   return sendMessage(text, { reply_markup: withDismiss([]) }, ctx)
@@ -308,6 +339,7 @@ async function handleCommand(message: Record<string, unknown>) {
     case '/listo':         return handleListo(args[0], ctx)
     case '/asignar':       return handleAsignar(args[0], args.slice(1).join(' '), ctx)
     case '/recordatorios': return handleRecordatorios(args[0], args.slice(1), ctx)
+    case '/cambio':        return handleCambio(args[0] ?? '', args[1] ?? '', ctx)
     case '/ayuda':         return handleAyuda(ctx)
     default:               // Ignore unknown commands
   }

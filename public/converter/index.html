@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Conversor de divisas</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         var(--tg-theme-bg-color, #18222d);
+      --bg2:        var(--tg-theme-secondary-bg-color, #232e3c);
+      --text:       var(--tg-theme-text-color, #f0f0f0);
+      --hint:       var(--tg-theme-hint-color, #7d8b99);
+      --accent:     var(--tg-theme-button-color, #2ea6ff);
+      --accent-txt: var(--tg-theme-button-text-color, #ffffff);
+      --link:       var(--tg-theme-link-color, #2ea6ff);
+      --radius: 14px;
+      --gap: 10px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      padding: 16px 16px 90px; /* bottom pad for MainButton */
+    }
+
+    /* ── Header ───────────────────────────────────── */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .header h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .refresh-btn {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 1.3rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 8px;
+      transition: opacity .15s;
+      line-height: 1;
+    }
+    .refresh-btn:active { opacity: .5; }
+    .refresh-btn.spinning { animation: spin .7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Currency cards ───────────────────────────── */
+    .cards {
+      display: flex;
+      flex-direction: column;
+      gap: var(--gap);
+      flex: 1;
+    }
+
+    .card {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: box-shadow .2s, transform .15s;
+      cursor: text;
+      position: relative;
+    }
+    .card:focus-within {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+    .card.active {
+      box-shadow: 0 0 0 2px var(--accent);
+    }
+
+    .flag {
+      font-size: 2rem;
+      line-height: 1;
+      flex-shrink: 0;
+    }
+
+    .card-body {
+      flex: 1;
+      min-width: 0;
+    }
+    .currency-label {
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--hint);
+      margin-bottom: 3px;
+    }
+    .amount-input {
+      width: 100%;
+      background: none;
+      border: none;
+      outline: none;
+      color: var(--text);
+      font-size: 1.55rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.02em;
+      caret-color: var(--accent);
+    }
+    .amount-input::placeholder { color: var(--hint); }
+    .amount-input.skeleton {
+      background: var(--hint);
+      border-radius: 6px;
+      color: transparent;
+      pointer-events: none;
+      animation: pulse 1.4s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: .35; }
+      50%       { opacity: .15; }
+    }
+
+    .card-rate {
+      font-size: 0.72rem;
+      color: var(--hint);
+      margin-top: 3px;
+    }
+
+    /* ── Footer ───────────────────────────────────── */
+    .footer {
+      margin-top: 16px;
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--hint);
+      line-height: 1.5;
+    }
+    .footer a { color: var(--link); text-decoration: none; }
+
+    /* ── Error state ──────────────────────────────── */
+    .error-box {
+      background: var(--bg2);
+      border-radius: var(--radius);
+      padding: 24px;
+      text-align: center;
+      color: var(--hint);
+      display: none;
+    }
+    .error-box.visible { display: block; }
+    .error-box .err-icon { font-size: 2rem; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <h1>💱 Conversor</h1>
+  <button class="refresh-btn" id="refreshBtn" title="Actualizar tasas">↻</button>
+</div>
+
+<div class="cards" id="cards">
+  <!-- Injected by JS -->
+</div>
+
+<div class="error-box" id="errorBox">
+  <div class="err-icon">⚠️</div>
+  <div>No se pudieron cargar las tasas.<br/>Revisa tu conexión e intenta de nuevo.</div>
+</div>
+
+<div class="footer" id="footer">Cargando tasas…</div>
+
+<script>
+// ── Telegram SDK init ───────────────────────────────────────────────────────
+const tg = window.Telegram?.WebApp
+if (tg) {
+  tg.ready()
+  tg.expand()
+  tg.MainButton.setText('Cerrar').show()
+  tg.MainButton.onClick(() => tg.close())
+}
+
+function haptic() {
+  tg?.HapticFeedback?.impactOccurred('light')
+}
+
+// ── Config ──────────────────────────────────────────────────────────────────
+const CURRENCIES = [
+  { code: 'KRW', name: 'Won coreano',   flag: '🇰🇷', symbol: '₩',    decimals: 0 },
+  { code: 'JPY', name: 'Yen japonés',   flag: '🇯🇵', symbol: '¥',    decimals: 0 },
+  { code: 'USD', name: 'Dólar',         flag: '🇺🇸', symbol: 'US$',  decimals: 2 },
+  { code: 'CLP', name: 'Peso chileno',  flag: '🇨🇱', symbol: '$',    decimals: 0 },
+]
+
+const RATES_URL = 'https://tvwoypueurmkklfsktmx.supabase.co/functions/v1/get-rates'
+
+// ── State ───────────────────────────────────────────────────────────────────
+let rates = null          // { KRW, JPY, USD, CLP } — 1 unit = X CLP
+let activeCurrency = null // code of the field the user is typing in
+let activeRawValue = ''   // raw string the user typed (before formatting)
+
+// ── URL pre-fill ────────────────────────────────────────────────────────────
+const params     = new URLSearchParams(location.search)
+const initAmount = params.get('amount') || ''
+const initCurrency = (params.get('currency') || 'KRW').toUpperCase()
+
+// ── DOM helpers ─────────────────────────────────────────────────────────────
+const cardsEl   = document.getElementById('cards')
+const footerEl  = document.getElementById('footer')
+const errorBox  = document.getElementById('errorBox')
+const refreshBtn = document.getElementById('refreshBtn')
+
+function fmt(amount, currency) {
+  const c = CURRENCIES.find(x => x.code === currency)
+  if (!c || isNaN(amount)) return ''
+  return amount.toLocaleString('es-CL', {
+    minimumFractionDigits: c.decimals,
+    maximumFractionDigits: c.decimals,
+  })
+}
+
+function rateLabel(currency) {
+  if (!rates || currency === 'CLP') return ''
+  const rate = rates[currency]
+  const c = CURRENCIES.find(x => x.code === currency)
+  return `1 ${c.symbol} = $ ${fmt(rate, 'CLP')} CLP`
+}
+
+// ── Render cards (called once) ───────────────────────────────────────────────
+function renderCards() {
+  cardsEl.innerHTML = ''
+  for (const c of CURRENCIES) {
+    const card = document.createElement('div')
+    card.className = 'card'
+    card.dataset.code = c.code
+    card.innerHTML = `
+      <div class="flag">${c.flag}</div>
+      <div class="card-body">
+        <div class="currency-label">${c.symbol} · ${c.name}</div>
+        <input
+          class="amount-input skeleton"
+          id="input-${c.code}"
+          inputmode="decimal"
+          placeholder="0"
+          autocomplete="off"
+          data-code="${c.code}"
+        />
+        <div class="card-rate" id="rate-${c.code}"></div>
+      </div>
+    `
+    cardsEl.appendChild(card)
+
+    const input = card.querySelector('input')
+    input.addEventListener('focus', () => {
+      setActive(c.code, input.value.replace(/\./g, '').replace(',', '.'))
+      card.classList.add('active')
+    })
+    input.addEventListener('blur', () => {
+      card.classList.remove('active')
+      // Reformat on blur
+      if (activeCurrency === c.code && activeRawValue !== '') {
+        const num = parseFloat(activeRawValue)
+        if (!isNaN(num)) input.value = fmt(num, c.code)
+      }
+    })
+    input.addEventListener('input', () => {
+      haptic()
+      // Allow only numbers and one decimal separator
+      const raw = input.value.replace(/[^\d,.]/g, '')
+      activeRawValue = raw.replace(',', '.')
+      activeCurrency = c.code
+      recalculate()
+    })
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') input.blur()
+    })
+  }
+}
+
+// ── Active field tracking ────────────────────────────────────────────────────
+function setActive(code, rawVal) {
+  activeCurrency = code
+  activeRawValue = rawVal
+}
+
+// ── Recalculate all fields from active one ───────────────────────────────────
+function recalculate() {
+  if (!rates || !activeCurrency) return
+
+  const sourceAmount = parseFloat(activeRawValue)
+  if (isNaN(sourceAmount) || activeRawValue === '') {
+    // Clear all other fields
+    for (const c of CURRENCIES) {
+      if (c.code === activeCurrency) continue
+      const inp = document.getElementById(`input-${c.code}`)
+      if (inp) inp.value = ''
+    }
+    return
+  }
+
+  // Convert source → CLP → target
+  const sourceToCLP = rates[activeCurrency] // 1 unit of source = X CLP
+  const clpAmount   = sourceAmount * sourceToCLP
+
+  for (const c of CURRENCIES) {
+    if (c.code === activeCurrency) continue
+    const inp = document.getElementById(`input-${c.code}`)
+    if (!inp) continue
+    const converted = clpAmount / rates[c.code]
+    inp.value = fmt(converted, c.code)
+  }
+}
+
+// ── Load rates ───────────────────────────────────────────────────────────────
+async function loadRates() {
+  refreshBtn.classList.add('spinning')
+  errorBox.classList.remove('visible')
+
+  try {
+    const res = await fetch(RATES_URL)
+    if (!res.ok) throw new Error('HTTP ' + res.status)
+    const data = await res.json()
+    rates = data.rates // { KRW, JPY, USD, CLP: 1 }
+
+    // Remove skeletons
+    for (const c of CURRENCIES) {
+      const inp = document.getElementById(`input-${c.code}`)
+      if (inp) inp.classList.remove('skeleton')
+      const rateEl = document.getElementById(`rate-${c.code}`)
+      if (rateEl) rateEl.textContent = rateLabel(c.code)
+    }
+
+    // Format the updated timestamp nicely
+    const updatedDate = new Date(data.updated)
+    const diffH = Math.round((Date.now() - updatedDate) / 3_600_000)
+    const timeLabel = diffH < 1 ? 'hace menos de 1 hora'
+                    : diffH < 24 ? `hace ${diffH} hora${diffH > 1 ? 's' : ''}`
+                    : updatedDate.toLocaleDateString('es-CL')
+    footerEl.textContent = `Tasas de cambio · ${timeLabel}`
+
+    // Pre-fill from URL params
+    if (initAmount && !activeCurrency) {
+      const inp = document.getElementById(`input-${initCurrency}`)
+      if (inp && rates[initCurrency]) {
+        inp.value = initAmount
+        setActive(initCurrency, initAmount)
+        recalculate()
+        // Re-format the active field too
+        const num = parseFloat(initAmount)
+        if (!isNaN(num)) inp.value = fmt(num, initCurrency)
+      }
+    }
+
+  } catch (err) {
+    console.error(err)
+    errorBox.classList.add('visible')
+    footerEl.textContent = 'No se pudieron cargar las tasas.'
+  } finally {
+    refreshBtn.classList.remove('spinning')
+  }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+renderCards()
+loadRates()
+refreshBtn.addEventListener('click', () => {
+  haptic()
+  loadRates()
+})
+</script>
+</body>
+</html>
